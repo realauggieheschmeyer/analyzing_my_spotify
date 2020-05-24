@@ -9,8 +9,8 @@ library(textrecipes)
 library(tidyverse)
 library(umap)
 
-# Sys.setenv(SPOTIFY_CLIENT_ID = "a905fab479a848579b4a190f33e57aa6")
-# Sys.setenv(SPOTIFY_CLIENT_SECRET = "02c30b0b7def484b871779e6c0359704")
+Sys.setenv(SPOTIFY_CLIENT_ID = "a905fab479a848579b4a190f33e57aa6")
+Sys.setenv(SPOTIFY_CLIENT_SECRET = "02c30b0b7def484b871779e6c0359704")
 
 access_token <- get_spotify_access_token()
 
@@ -58,14 +58,17 @@ combine_artists <- function(df) {
 }
 
 my_top_songs_cleaned_tbl <- my_top_songs_tbl %>%
-  select(name, artists, popularity) %>%
+  select(id, name, artists, popularity) %>%
   mutate(my_ranking = row_number()) %>% 
-  rename(song = name) %>%
+  rename(
+    song = name,
+    song_id = id
+  ) %>%
   unnest(artists) %>%
-  group_by(song, popularity, my_ranking) %>%
+  group_by(song_id, song, popularity, my_ranking) %>%
   group_nest() %>%
   mutate(artist = map_chr(data, combine_artists)) %>%
-  select(song, artist, popularity, my_ranking)
+  select(song_id, song, artist, popularity, my_ranking)
 
 my_top_songs_cleaned_tbl %>% 
   mutate(
@@ -92,8 +95,7 @@ artists_genre_long_tbl <- my_top_artists_tbl %>%
 
 artists_genre_long_tbl %>% 
   tidytext::unnest_tokens(word, genres) %>% 
-  count(word, sort = TRUE) %>% 
-  View()
+  count(word, sort = TRUE)
 
 artists_genre_processed_tbl <- recipe(name ~ ., data = artists_genre_long_tbl) %>% 
   step_tokenize(genres) %>% 
@@ -107,21 +109,18 @@ artists_genre_processed_tbl <- recipe(name ~ ., data = artists_genre_long_tbl) %
   ungroup() %>% 
   set_names(names(.) %>% str_replace_all("\\.", "_"))
 
-kmeans_mapper <- function(data, rm_col, centers = 3) {
+kmeans_mapper <- function(data, centers = 3) {
   
-  rm_var <- enquo(rm_col)
-  
-  data %>% 
-    select(- !! rm_var) %>% 
+  data %>%
     kmeans(centers = centers, nstart = 100)
   
 }
 
-kmeans_mapped_tbl <- tibble(centers = 1:15) %>% 
+kmeans_artists_mapped_tbl <- tibble(centers = 1:15) %>% 
   mutate(k_means = centers %>% map(kmeans_mapper, data = artists_genre_processed_tbl, rm_col = name),
          glance = k_means %>% map(glance))
 
-kmeans_mapped_tbl %>%
+kmeans_artists_mapped_tbl %>%
   unnest(glance) %>%
   select(centers, tot.withinss) %>%
   ggplot(aes(x = centers, y = tot.withinss)) +
@@ -132,34 +131,29 @@ kmeans_mapped_tbl %>%
        subtitle = "Measures the distance that each of the customers are from the K-Means center",
        caption = "Conclusion: Based on the skree plot, we are going to select three clusters")
 
-umap_obj <- artists_genre_processed_tbl %>% 
+umap_artists_obj <- artists_genre_processed_tbl %>% 
   select(-name) %>% 
   umap()
 
-umap_results_tbl <- umap_obj$layout %>% 
+umap_artists_results_tbl <- umap_artists_obj$layout %>% 
   as_tibble() %>% 
   set_names(c("x", "y")) %>% 
   bind_cols(artists_genre_processed_tbl %>% 
               select(name))
 
-umap_results_tbl %>% 
-  ggplot(aes(x, y)) +
-  geom_point() +
-  geom_label_repel(aes(label = name), size = 3)
-
-kmeans_obj <- kmeans_mapped_tbl %>% 
+kmeans_artists_obj <- kmeans_artists_mapped_tbl %>% 
   pull(k_means) %>% 
   pluck(3)
 
-kmeans_clusters_tbl <- kmeans_obj %>% 
+kmeans_clusters_artists_tbl <- kmeans_artists_obj %>% 
   augment(artists_genre_processed_tbl) %>% 
   select(name, .cluster)
 
-umap_kmeans_results_tbl <- umap_results_tbl %>% 
+umap_kmeans_results_artists_tbl <- umap_artists_results_tbl %>% 
   left_join(kmeans_clusters_tbl,
             by = "name")
 
-umap_kmeans_results_tbl %>%
+umap_kmeans_results_artists_tbl %>%
   mutate(
     genre = case_when(
       .cluster == 1 ~ "Alternative",
@@ -184,4 +178,90 @@ umap_kmeans_results_tbl %>%
 
 # Clustering Top Songs ----
 
-my_top_songs_cleaned_tbl
+my_top_songs_features_tbl <- my_top_songs_cleaned_tbl %>%
+  mutate(audio_features = map(song_id, get_track_audio_features)) %>% 
+  unnest(audio_features) %>%
+  mutate(duration_m = duration_ms / 1000 / 60) %>% 
+  select(-contains("id"), -uri, -track_href, -analysis_url, -type, -duration_ms)
+
+my_top_songs_features_tbl %>% 
+  pivot_longer(cols = danceability:duration_m, names_to = "feature", values_to = "measure") %>% 
+  ggplot(aes(x = measure)) +
+  geom_histogram() +
+  facet_wrap(~ feature, scales = "free")
+
+my_top_songs_features_tbl %>% 
+  select(song, artist, energy, valence) %>% 
+  mutate(plot_name = str_c(song, artist, sep = "\n")) %>% 
+  ggplot(aes(x = valence, y = energy, label = plot_name)) +
+  geom_point(color = "#1DB954") +
+  geom_vline(xintercept = 0.5, color = "black") +
+  geom_hline(yintercept = 0.5, color = "black") +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1))
+
+song_features_processed_tbl <- recipe(song + artist ~ ., data = my_top_songs_features_tbl) %>% 
+  step_rm(time_signature, my_ranking, duration_m, popularity, instrumentalness, key) %>% 
+  step_normalize(all_numeric()) %>%
+  prep() %>% 
+  juice()
+
+kmeans_songs_mapped_tbl <- tibble(centers = 1:15) %>% 
+  mutate(k_means = centers %>% map(kmeans_mapper, data = song_features_processed_tbl %>% select(-song, -artist)),
+         glance = k_means %>% map(glance))
+
+kmeans_songs_mapped_tbl %>%
+  unnest(glance) %>%
+  select(centers, tot.withinss) %>%
+  ggplot(aes(x = centers, y = tot.withinss)) +
+  geom_point(color = "#1DB954", size = 4) +
+  geom_line(color = "#1DB954") +
+  theme_minimal() +
+  labs(title = "Skree plot",
+       subtitle = "Measures the distance that each of the songs are from the K-Means center",
+       caption = "Conclusion: Based on the skree plot, we are going to select seven clusters")
+
+umap_songs_obj <- song_features_processed_tbl %>% 
+  select(-song, -artist) %>% 
+  umap()
+
+umap_songs_results_tbl <- umap_songs_obj$layout %>% 
+  as_tibble() %>%
+  set_names(c("x", "y")) %>% 
+  bind_cols(song_features_processed_tbl %>% 
+              select(song, artist))
+
+kmeans_songs_obj <- kmeans_songs_mapped_tbl %>% 
+  pull(k_means) %>% 
+  pluck(6)
+
+kmeans_clusters_songs_tbl <- kmeans_songs_obj %>% 
+  augment(song_features_processed_tbl) %>% 
+  select(song, artist, .cluster)
+
+umap_kmeans_results_songs_tbl <- umap_songs_results_tbl %>% 
+  left_join(kmeans_clusters_songs_tbl,
+            by = c("song", "artist"))
+
+umap_kmeans_results_songs_tbl %>%
+  mutate(
+    # genre = case_when(
+    #   .cluster == 1 ~ "Alternative",
+    #   .cluster == 2 ~ "Metal/Emo",
+    #   TRUE ~ "Pop/Rap"
+    # ),
+    label_text = str_glue("Song: {song}\nArtist: {artist}")
+  ) %>% 
+  ggplot(aes(x, y, color = .cluster)) +
+  geom_point() +
+  geom_label_repel(aes(label = label_text), size = 3) +
+  dark_theme_minimal() +
+  # scale_color_manual(values = c("#1DB954", "white", "#b3b3b3")) +
+  labs(
+    title = "Grouping My Top Tracks By Audio Features",
+    subtitle = "Using UMAP 2D Projection with K-Means Cluster Assignment",
+    caption = "Conclusion: Three groups identified using two different algorithms",
+    x = "",
+    y = ""
+  ) +
+  theme(legend.position = "none")

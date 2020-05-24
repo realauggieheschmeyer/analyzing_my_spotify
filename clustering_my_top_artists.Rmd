@@ -1,0 +1,18 @@
+---
+title: "Clustering My Top Spotify Artists"
+author: "Auggie Heschmeyer"
+date: "5/24/2020"
+output: html_document
+theme: sandstone
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I recently discovered the [`spotifyr`](https://www.rcharlie.com/spotifyr/) package that allows you to access the Spotify API data within R. More importantly, it allows you the opportunity to download and analyze your own listening data. As a data nerd and an avid Spotify user, I thought it would make a fun exercise to see if there are any patterns within the music I listen to and if I can back up my self-described musical tastes ("alternative rock with a pop bent") with data.
+
+In this post I'll take a look at my top artists and their genres tro see how similar they are. In my next post, I will look at my top songs or, as Spotify calls them, *tracks*.
+
+### Setting Up the API
+
