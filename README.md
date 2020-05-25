@@ -1,2 +1,2 @@
-# analyzing_my_spotify
-Analyzing my top artists and tracks using {spotifyr}
+# Analyzing My Spotify Listening Data
+Analyzing my top artists and tracks using [`spotifyr`](https://www.rcharlie.com/spotifyr/).

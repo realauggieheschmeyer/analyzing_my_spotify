@@ -7,7 +7,7 @@ theme: sandstone
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 
 library(spotifyr)
 library(knitr)
@@ -43,7 +43,7 @@ The `time_range` argument is a little more involved. Rather than being able to s
 
 Finally, since I am a fan of working within the `tidyverse`, we're going to save the output of `get_my_top_artists_or_tracks()` as a tibble.
 
-```{r message=FALSE}
+```{r}
 library(tidyverse)
 
 my_top_artists_tbl <- get_my_top_artists_or_tracks(
@@ -98,3 +98,99 @@ my_top_artists_tbl %>%
 One thing to take note of is that there already appears to be some clustering going on within this group in terms of each artists' popularity. The Weeknd appears to be far more popular than any other artist on my list due to him being the only pop/Top 40 musician. Twenty One Pilots, The 1975 and Bastille, however, all have similar popularity levels and are all more popular than the next set of artists. Finally, Palaye Royale and The Band CAMINO are the least popular of all due to the fact that they're just recently starting to gain popularity. This indicates to me that popularity is a variable worth including when it comes time to start clustering these artists.
 
 ### Exploring Genres
+
+If you recall from above, the `my_top_artists_tbl` has a variable called `genre`. This is stored as a nested list, so to access each list of genres, we'll have to do a little more manipulation.
+
+```{r}
+artists_genre_long_tbl <- my_top_artists_tbl %>% 
+  select(name, popularity, followers.total, genres) %>% 
+  unnest(genres)
+
+artists_genre_long_tbl %>% 
+  head() %>% 
+  kable()
+```
+
+Now we have one row per genre per artist. Let's use the `tidytext` package to do some basic text mining and see which genres are most common among my top artists.
+
+```{r}
+library(tidytext)
+
+artists_genre_long_tbl %>% 
+  unnest_tokens(word, genres) %>% 
+  count(word, sort = TRUE) %>% 
+  slice(1:10) %>% 
+  kable()
+```
+
+There are some expected results in this list (pop, rock, alternative), but it appears some subgenre modifiers have made their way onto the list as well (modern, post). We could expand this list to get a more nuaced picture of my listening, but since the counts are already getting small, I hesitate to add anything more. 
+
+Let's turn each of these top genres into a binary variable indicating whether an artist fits that profile. Additionally, we'll normalize `popularity` and `followers.total` so that they have a mean of 0 and standard deviation of 1. This will ensure that they don't have undue weighting in the clustering algorthim. We'll make use of the `recipes` and `textrecipes` packages. 
+
+```{r}
+library(recipes)
+library(textrecipes)
+
+artists_genre_processed_tbl <- recipe(name ~ ., data = artists_genre_long_tbl) %>% 
+  step_tokenize(genres) %>% 
+  step_tokenfilter(genres, max_tokens = 10) %>% 
+  step_tf(genres, weight_scheme = "binary") %>% 
+  step_normalize(popularity, followers.total) %>%
+  prep() %>% 
+  juice() %>% 
+  group_by(name, popularity, followers.total) %>% 
+  summarize_all(max) %>% 
+  ungroup() %>% 
+  set_names(names(.) %>% str_replace_all("\\.", "_"))
+```
+
+Let's see how it looks.
+
+```{r}
+artists_genre_processed_tbl %>% 
+  glimpse()
+```
+
+It looks like pop is a popular genre/subgenre.
+
+### K-Means Clustering
+
+Now that we have our data in a cluster-friendly format, let's define a functions that's going to allow us to utilize a k-means clustering algorithm in a tidy way.
+
+```{r}
+kmeans_mapper <- function(data, centers = 3) {
+  
+  data %>%
+    kmeans(centers = centers, nstart = 100)
+  
+}
+```
+
+What this function is going to allow us to do is to test a range of clusters (1-15) and store the results of the clustering algorithm in a tibble format. Additionally, we're going to use the `glance()` function from the `broom` package to extract relevant metrics from the algorithm.
+
+```{r}
+library(broom)
+
+kmeans_artists_mapped_tbl <- tibble(centers = 1:15) %>% 
+  mutate(k_means = centers %>% map(kmeans_mapper, data = artists_genre_processed_tbl %>% select(-name)),
+         glance = k_means %>% map(glance))
+```
+
+I would print the `kmeans_artists_mapped_tbl`, but it's a bunch of nested data and isn't much to look at. Instead, we'll extract the necessary information from each model to make a skree plot and see if there is an ideal number of clusters.
+
+```{r}
+kmeans_artists_mapped_tbl %>%
+  unnest(glance) %>%
+  select(centers, tot.withinss) %>%
+  ggplot(aes(x = centers, y = tot.withinss)) +
+  geom_point(color = "#1DB954", size = 4) +
+  geom_line(color = "#1DB954") +
+  dark_theme_minimal() +
+  labs(title = "Skree plot")
+```
+
+It doesn't look like there is a discernable "elbow" to this plot, so we'll arbitrarily pick three. Okay, maybe it's not totally arbitrary; I just don't think my taste in music is that varied.
+
+### Dimensionality Reduction
+
+To be able to show the results of our clustering exercise, we'll use a dimensionality reduction process to convert all of our popularity and genre data into two dimensions (for x and y axes).
