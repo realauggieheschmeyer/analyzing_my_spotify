@@ -7,7 +7,11 @@ theme: sandstone
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 8)
 
 library(spotifyr)
 library(knitr)
@@ -20,11 +24,11 @@ access_token <- get_spotify_access_token()
 
 I recently discovered the [`spotifyr`](https://www.rcharlie.com/spotifyr/) package that allows you to access the Spotify API data within R. More importantly, it allows you the opportunity to download and analyze your own listening data. As a data nerd and an avid Spotify user, I thought it would make a fun exercise to see if there are any patterns within the music I listen to and if I can back up my self-described musical tastes ("alternative rock with a pop bent") with data.
 
-In this post I'll take a look at my top artists and their genres tro see how similar they are. In my next post, I will look at my top songs or, as Spotify calls them, *tracks*.
+In this post I'll take a look at my top artists and their genres to see how similar they are. In my next post, I will look at my top songs or, as Spotify calls them, *tracks*.
 
 ### Setting Up the API
 
-I won't go into the specifics about how to set up a developer account wtih Spotify because the package creators do a fine job explaining how to do so on the [`spotifyr` website](https://www.rcharlie.com/spotifyr/). Once you have your credentials, however, getting access is as simple as three lines of code.
+I won't go into the specifics about how to set up a developer account with Spotify because the package creators do a fine job explaining how to do so on the [`spotifyr` website](https://www.rcharlie.com/spotifyr/). Once you have your credentials, however, getting access is as simple as three lines of code.
 
 ```{r eval=FALSE}
 library(spotifyr)
@@ -37,9 +41,9 @@ access_token <- get_spotify_access_token()
 
 ### Getting My Top Artist Data
 
-The `spotifyr` package contains a plethora of ways to interact with Spotify's API, but to access my top artists, we can use the appopriately named `get_my_top_artists_or_tracks()` function. This function has a number of arguments, but the three we are most concerned with for this analysis are `type`, `limit` and `time_range`. `type` and `limit` are straightforward and allow us to define whether we want artist or track data along with how many records we want to return, respectively. We're going to use `"artist"` and `50` as our values ofr this analysis.
+The `spotifyr` package contains a plethora of ways to interact with Spotify's API, but to access my top artists, we can use the appropriately named `get_my_top_artists_or_tracks()` function. This function has a number of arguments, but the three we are most concerned with for this analysis are `type`, `limit` and `time_range`. `type` and `limit` are straightforward and allow us to define whether we want artist or track data along with how many records we want to return, respectively. We're going to use `"artist"` and `50` as our values for this analysis.
 
-The `time_range` argument is a little more involved. Rather than being able to specify an exact date range, `time_range` takes three possible arguments as strigns: `"short_term"`, `"median_term"` or `"long_term"`. The [Spotify for Developers reference guide](https://developer.spotify.com/documentation/web-api/reference/personalization/get-users-top-artists-and-tracks/) defines these as approximately "the last 4 weeks," "the last 6 months" and "several years," respectively. The argument defaults to `"median_term"` and that's what we'll stick with today as I'm most interested in what I've been listening to this year.
+The `time_range` argument is a little more involved. Rather than being able to specify an exact date range, `time_range` takes three possible arguments as strings: `"short_term"`, `"medium_term"` or `"long_term"`. The [Spotify for Developers reference guide](https://developer.spotify.com/documentation/web-api/reference/personalization/get-users-top-artists-and-tracks/) defines these as approximately "the last 4 weeks," "the last 6 months" and "several years," respectively. The argument defaults to `"medium_term"` and that's what we'll stick with today as I'm most interested in what I've been listening to this year.
 
 Finally, since I am a fan of working within the `tidyverse`, we're going to save the output of `get_my_top_artists_or_tracks()` as a tibble.
 
@@ -123,9 +127,9 @@ artists_genre_long_tbl %>%
   kable()
 ```
 
-There are some expected results in this list (pop, rock, alternative), but it appears some subgenre modifiers have made their way onto the list as well (modern, post). We could expand this list to get a more nuaced picture of my listening, but since the counts are already getting small, I hesitate to add anything more. 
+There are some expected results in this list (pop, rock, alternative), but it appears some sub-genre modifiers have made their way onto the list as well (modern, post). We could expand this list to get a more nuanced picture of my listening, but since the counts are already getting small, I hesitate to add anything more. 
 
-Let's turn each of these top genres into a binary variable indicating whether an artist fits that profile. Additionally, we'll normalize `popularity` and `followers.total` so that they have a mean of 0 and standard deviation of 1. This will ensure that they don't have undue weighting in the clustering algorthim. We'll make use of the `recipes` and `textrecipes` packages. 
+Let's turn each of these top genres into a binary variable indicating whether an artist fits that profile. Additionally, we'll normalize `popularity` and `followers.total` so that they have a mean of 0 and standard deviation of 1. This will ensure that they don't have undue weighting in the clustering algorithm. We'll make use of the `recipes` and `textrecipes` packages. 
 
 ```{r}
 library(recipes)
@@ -151,11 +155,11 @@ artists_genre_processed_tbl %>%
   glimpse()
 ```
 
-It looks like pop is a popular genre/subgenre.
+It looks like pop is a popular genre/sub-genre.
 
 ### K-Means Clustering
 
-Now that we have our data in a cluster-friendly format, let's define a functions that's going to allow us to utilize a k-means clustering algorithm in a tidy way.
+Now that we have our data in a cluster-friendly format, let's define a function that's going to allow us to utilize a k-means clustering algorithm in a tidy way.
 
 ```{r}
 kmeans_mapper <- function(data, centers = 3) {
@@ -166,11 +170,12 @@ kmeans_mapper <- function(data, centers = 3) {
 }
 ```
 
-What this function is going to allow us to do is to test a range of clusters (1-15) and store the results of the clustering algorithm in a tibble format. Additionally, we're going to use the `glance()` function from the `broom` package to extract relevant metrics from the algorithm.
+What this function is going to allow us to do is to test a range of clusters (1-15) and store the results of the clustering algorithm in a tibble format. Additionally, we're going to use the `glance()` function from the `broom` package to extract relevant metrics from the algorithm. We'll also use the `set.seed()` function to ensure reproducible.
 
 ```{r}
 library(broom)
 
+set.seed(123)
 kmeans_artists_mapped_tbl <- tibble(centers = 1:15) %>% 
   mutate(k_means = centers %>% map(kmeans_mapper, data = artists_genre_processed_tbl %>% select(-name)),
          glance = k_means %>% map(glance))
@@ -189,8 +194,84 @@ kmeans_artists_mapped_tbl %>%
   labs(title = "Skree plot")
 ```
 
-It doesn't look like there is a discernable "elbow" to this plot, so we'll arbitrarily pick three. Okay, maybe it's not totally arbitrary; I just don't think my taste in music is that varied.
+It doesn't look like there is a discernible "elbow" to this plot, so we'll arbitrarily pick three. Okay, maybe it's not totally arbitrary; I just don't think my taste in music is that varied.
 
 ### Dimensionality Reduction
 
-To be able to show the results of our clustering exercise, we'll use a dimensionality reduction process to convert all of our popularity and genre data into two dimensions (for x and y axes).
+To be able to show the results of our clustering exercise, we'll use a dimensionality reduction process to convert all of our popularity and genre data into two dimensions (for x and y axes). There are a number of reductions processes we could use including PCA and hashing, but for this analysis, we'll use UMAP. UMAP works similarly to PCA but allows for the mapping of non-linear relationships between variables. We'll also bind our artist names onto these new, reduced variables.
+
+```{r}
+library(umap)
+
+set.seed(123)
+umap_artists_obj <- artists_genre_processed_tbl %>% 
+  select(-name) %>% 
+  umap()
+
+umap_artists_results_tbl <- umap_artists_obj$layout %>% 
+  as_tibble() %>% 
+  set_names(c("x", "y")) %>% 
+  bind_cols(artists_genre_processed_tbl %>% 
+              select(name))
+
+umap_artists_results_tbl %>% 
+  head() %>% 
+  kable()
+```
+
+Before UMAP, we had 12 variables describing popularity and genres. Now we have two, `x` and `y`.
+
+### Plotting the Artist Clusters
+
+Now that we've done the hard work of clustering the artists and reducing the number of variables we use to describe them, now comes the fun part: visualizing the clusters. We'll use the following chunks of code to pull the cluster information, use the `augment()` function to extract the clusters numbers and then join those cluster numbers to the UMAP-reduced variables.
+
+```{r}
+kmeans_artists_obj <- kmeans_artists_mapped_tbl %>% 
+  pull(k_means) %>% 
+  pluck(3)
+
+kmeans_clusters_artists_tbl <- kmeans_artists_obj %>% 
+  augment(artists_genre_processed_tbl) %>% 
+  select(name, .cluster)
+
+umap_kmeans_results_artists_tbl <- umap_artists_results_tbl %>% 
+  left_join(kmeans_clusters_artists_tbl,
+            by = "name")
+
+umap_kmeans_results_artists_tbl %>% 
+  glimpse()
+```
+
+Before plotting, we're going to add a `label_text` variable so that we have some nice labeling on our finished plot. We're also going to use the `ggreepel` package to ensure that our labels are plotted in a readable way.
+
+```{r}
+library(ggrepel)
+
+umap_kmeans_results_artists_tbl %>%
+  mutate(
+    label_text = str_glue("Artist: {name}\nCluster: {.cluster}")
+  ) %>% 
+  ggplot(aes(x, y, color = .cluster)) +
+  geom_point() +
+  geom_label_repel(aes(label = label_text), 
+                   size = 3, 
+                   fill = "black") +
+  dark_theme_minimal() +
+  scale_color_manual(values = c("#1DB954", "white", "#b3b3b3")) +
+  labs(
+    title = "Grouping My Top Artists by Genres",
+    x = "",
+    y = ""
+  ) +
+  theme(legend.position = "none")
+```
+
+It looks like the combination of k-means and UMAP did a great job identifying some clear clusters within the data.
+
+Cluster 1 contains some of the heavier artists, some artists I would define as "emo" and, interestingly, some classical artists. This leads me to believe that `popularity` and `followers_total` played a large part in the grouping of artists.
+
+Cluster 2 is very clearly the popular music cluster as it contains all of the artists who have made it into the Top 40. `popularity` and `followers_total` must've played a big part in clustering this group, as well.
+
+Cluster 3 is the alternative cluster. Because a lot of these artits might be found on the same playlist despite different levels of popularity, I would think that the `genre` variables probably had the most effect on this group.
+     
+Thanks for walking through this analysis with me. Check back soon for part two of this analysis where we group together my top songs using Spotify's audio features.

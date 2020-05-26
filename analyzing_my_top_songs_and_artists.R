@@ -58,16 +58,12 @@ combine_artists <- function(df) {
 }
 
 my_top_songs_cleaned_tbl <- my_top_songs_tbl %>%
-  select(id, name, artists, popularity) %>%
   mutate(my_ranking = row_number()) %>% 
   rename(
     song = name,
     song_id = id
   ) %>%
-  unnest(artists) %>%
-  group_by(song_id, song, popularity, my_ranking) %>%
-  group_nest() %>%
-  mutate(artist = map_chr(data, combine_artists)) %>%
+  mutate(artist = map_chr(artists, combine_artists)) %>%
   select(song_id, song, artist, popularity, my_ranking)
 
 my_top_songs_cleaned_tbl %>% 
