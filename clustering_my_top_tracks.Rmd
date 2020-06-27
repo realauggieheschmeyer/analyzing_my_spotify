@@ -295,4 +295,4 @@ Cluster 5 is the mellow cluster and features the only classical recording to mak
 
 Finally, Cluster 6 feature songs that I would describe as "anthemic." They're the type of songs that you might not know all the words to, but you can't help but shouting along to the chorus.
 
-Thanks for walking through this analysis with me. Check out the `spotifyr` package yourself and feel free to tag me on [Twitter](https://twitter.com/realauggiehesch) with what you find. I'd love to see. And please check back on my blog soon for more analyses.
+Thanks for walking through this analysis with me. Check out the `spotifyr` package yourself and feel free to tag me on [Twitter](https://twitter.com/realauggiehesch) with what you find. I'd love to see. And feel free to reach out to me on [LinkedIn](https://www.linkedin.com/in/auggieheschmeyer/) or [Twitter](https://twitter.com/realauggiehesch). Happy analyzing!

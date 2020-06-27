@@ -112,6 +112,7 @@ kmeans_mapper <- function(data, centers = 3) {
   
 }
 
+set.seed(2020)
 kmeans_artists_mapped_tbl <- tibble(centers = 1:15) %>% 
   mutate(k_means = centers %>% map(kmeans_mapper, data = artists_genre_processed_tbl, rm_col = name),
          glance = k_means %>% map(glance))
@@ -125,8 +126,9 @@ kmeans_artists_mapped_tbl %>%
   theme_minimal() +
   labs(title = "Skree plot",
        subtitle = "Measures the distance that each of the customers are from the K-Means center",
-       caption = "Conclusion: Based on the skree plot, we are going to select three clusters")
+       caption = "Conclusion: Based on the skree plot, we are going to select four clusters")
 
+set.seed(2020)
 umap_artists_obj <- artists_genre_processed_tbl %>% 
   select(-name) %>% 
   umap()
@@ -139,7 +141,7 @@ umap_artists_results_tbl <- umap_artists_obj$layout %>%
 
 kmeans_artists_obj <- kmeans_artists_mapped_tbl %>% 
   pull(k_means) %>% 
-  pluck(3)
+  pluck(4)
 
 kmeans_clusters_artists_tbl <- kmeans_artists_obj %>% 
   augment(artists_genre_processed_tbl) %>% 
@@ -151,22 +153,15 @@ umap_kmeans_results_artists_tbl <- umap_artists_results_tbl %>%
 
 umap_kmeans_results_artists_tbl %>%
   mutate(
-    genre = case_when(
-      .cluster == 1 ~ "Alternative",
-      .cluster == 2 ~ "Metal/Emo",
-      TRUE ~ "Pop/Rap"
-    ),
     label_text = str_glue("Artist: {name}\nGenre: {genre}")
   ) %>% 
   ggplot(aes(x, y, color = .cluster)) +
   geom_point() +
   geom_label_repel(aes(label = label_text), size = 3) +
   dark_theme_minimal() +
-  scale_color_manual(values = c("#1DB954", "white", "#b3b3b3")) +
+  scale_color_manual(values = c("#1DB954", "white", "#b3b3b3", "#535353")) +
   labs(
     title = "Grouping My Top Artists by Genres",
-    subtitle = "Using UMAP 2D Projection with K-Means Cluster Assignment",
-    caption = "Conclusion: Three groups identified using two different algorithms",
     x = "",
     y = ""
   ) +
