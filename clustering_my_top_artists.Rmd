@@ -227,7 +227,7 @@ kmeans_artists_mapped_tbl <- tibble(centers = 1:15) %>%
 
 ```
 
-I would print the `kmeans_artists_mapped_tbl`, but it's a bunch of nested data and isn't much to look at. Instead, we'll extract the necessary information from each model to make a *skree plot* and see if there is an ideal number of clusters.
+I would print the `kmeans_artists_mapped_tbl`, but it's a bunch of nested data and isn't much to look at. Instead, we'll extract the necessary information from each model to make an *elbow plot* and see if there is an ideal number of clusters.
 
 ```{r}
 
@@ -238,7 +238,7 @@ kmeans_artists_mapped_tbl %>%
   geom_point(color = "#1DB954", size = 4) +
   geom_line(color = "#1DB954") +
   dark_theme_minimal() +
-  labs(title = "Skree plot")
+  labs(title = "Elbow plot")
 
 ```
 

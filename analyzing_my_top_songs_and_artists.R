@@ -124,9 +124,9 @@ kmeans_artists_mapped_tbl %>%
   geom_point(color = "#1DB954", size = 4) +
   geom_line(color = "#1DB954") +
   theme_minimal() +
-  labs(title = "Skree plot",
+  labs(title = "Elbow plot",
        subtitle = "Measures the distance that each of the customers are from the K-Means center",
-       caption = "Conclusion: Based on the skree plot, we are going to select four clusters")
+       caption = "Conclusion: Based on the elbow plot, we are going to select four clusters")
 
 set.seed(2020)
 umap_artists_obj <- artists_genre_processed_tbl %>% 
@@ -197,6 +197,7 @@ song_features_processed_tbl <- recipe(song + artist ~ ., data = my_top_songs_fea
   prep() %>% 
   juice()
 
+set.seed(1234)
 kmeans_songs_mapped_tbl <- tibble(centers = 1:15) %>% 
   mutate(k_means = centers %>% map(kmeans_mapper, data = song_features_processed_tbl %>% select(-song, -artist)),
          glance = k_means %>% map(glance))
@@ -208,10 +209,11 @@ kmeans_songs_mapped_tbl %>%
   geom_point(color = "#1DB954", size = 4) +
   geom_line(color = "#1DB954") +
   theme_minimal() +
-  labs(title = "Skree plot",
+  labs(title = "Elbow plot",
        subtitle = "Measures the distance that each of the songs are from the K-Means center",
-       caption = "Conclusion: Based on the skree plot, we are going to select seven clusters")
+       caption = "Conclusion: Based on the elbow plot, we are going to select six clusters")
 
+set.seed(1234)
 umap_songs_obj <- song_features_processed_tbl %>% 
   select(-song, -artist) %>% 
   umap()
@@ -236,22 +238,16 @@ umap_kmeans_results_songs_tbl <- umap_songs_results_tbl %>%
 
 umap_kmeans_results_songs_tbl %>%
   mutate(
-    # genre = case_when(
-    #   .cluster == 1 ~ "Alternative",
-    #   .cluster == 2 ~ "Metal/Emo",
-    #   TRUE ~ "Pop/Rap"
-    # ),
-    label_text = str_glue("Song: {song}\nArtist: {artist}")
+    label_text = str_glue("Song: {song}\nArtist: {artist}\nCluster: {.cluster}")
   ) %>% 
   ggplot(aes(x, y, color = .cluster)) +
   geom_point() +
-  geom_label_repel(aes(label = label_text), size = 3) +
+  geom_label_repel(aes(label = label_text), 
+                   size = 2, 
+                   fill = "black") +
   dark_theme_minimal() +
-  # scale_color_manual(values = c("#1DB954", "white", "#b3b3b3")) +
   labs(
     title = "Grouping My Top Tracks By Audio Features",
-    subtitle = "Using UMAP 2D Projection with K-Means Cluster Assignment",
-    caption = "Conclusion: Three groups identified using two different algorithms",
     x = "",
     y = ""
   ) +

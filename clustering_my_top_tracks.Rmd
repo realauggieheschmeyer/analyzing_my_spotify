@@ -7,44 +7,71 @@ theme: sandstone
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(
+
+library(knitr)
+library(kableExtra)
+
+options(kableExtra.html.bsTable = T)
+
+kable <- function(data, digits = 2, ...) {
+  knitr::kable(
+    data,
+    digits = digits,
+    escape = F,
+    align = "c",
+    booktabs = T,
+    ...
+  ) %>%
+    kable_styling(
+      bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+      latex_options = "striped",
+      full_width = T,
+      ...
+    )
+}
+
+opts_chunk$set(
   echo = TRUE,
-  message = FALSE,
+  message = FALSE, 
   warning = FALSE,
-  fig.width = 10,
-  fig.height = 8)
+  fig.width = 8,
+  fig.height = 8,
+  fig.align = "center")
 
 library(spotifyr)
-library(knitr)
 
 Sys.setenv(SPOTIFY_CLIENT_ID = "a905fab479a848579b4a190f33e57aa6")
 Sys.setenv(SPOTIFY_CLIENT_SECRET = "02c30b0b7def484b871779e6c0359704")
 
 access_token <- get_spotify_access_token()
+
 ```
 
 I recently discovered the [`spotifyr`](https://www.rcharlie.com/spotifyr/) package that allows you to access the Spotify API data within R. More importantly, it allows you the opportunity to download and analyze your own listening data. As a data nerd and an avid Spotify user, I thought it would make a fun exercise to see if there are any patterns within the music I listen to and if I can back up my self-described musical tastes ("alternative rock with a pop bent") with data.
 
-In this post I'll take a look at my top *tracks* and their audio features to see how if I can find my own "genres." This analysis is part two of an an earlier analysis in which I clustered my top artists. Check that one out first as I went into slightly more detail about accessing my data as well as utilizing some text mining methodologies.
+In this post I'll take a look at my top *tracks* and their audio features to see if I can find my own "genres." This analysis is part two of an an earlier analysis in which [I clustered my top artists](https://www.auggieheschmeyer.com/blog/clustering-my-top-artists/). Check that one out first as I went into slightly more detail about accessing my data as well as utilizing some text mining methodologies.
 
-### Setting Up the API
+## Setting Up the API
 
 If you followed along with my last post, you should have your Spotify credentials on-hand and be ready to get your access token. Otherwise, check out the [`spotifyr` website](https://www.rcharlie.com/spotifyr/) for instructions on how to get access to the Spotify API. Once you have your credentials, you can run the following lines of code to get your access token.
 
 ```{r eval=FALSE}
+
 library(spotifyr)
 
 Sys.setenv(SPOTIFY_CLIENT_ID = 'xxxxxxxxxxxxxxxxxxxxx')
 Sys.setenv(SPOTIFY_CLIENT_SECRET = 'xxxxxxxxxxxxxxxxxxxxx')
 
 access_token <- get_spotify_access_token()
+
 ```
 
-### Getting My Top Tracks Data
+## Getting My Top Tracks Data
 
 Just like last time, we are going to use the `get_my_top_artists_or_tracks()` function. We're going to keep `limit` and `time_range` the same (`50` and `"medium_term"`) as we are interested in analyzing the same time period as we did last time. This time, however, we are going to switch our `type` argument from `"artist"` to `"tracks"`. Again, we're going to save the output of `get_my_top_artists_or_tracks()` as a tibble.
 
 ```{r}
+
 library(tidyverse)
 
 my_top_songs_tbl <- get_my_top_artists_or_tracks(
@@ -53,18 +80,22 @@ my_top_songs_tbl <- get_my_top_artists_or_tracks(
   time_range = "medium_term"
 ) %>% 
   as_tibble()
+
 ```
 
 Let's take a quick `glimpse()` at our data.
 
 ```{r}
+
 my_top_songs_tbl %>% 
   glimpse()
+
 ```
 
-We are provided with a lot of data about individual tracks, most of it revolving around the album details. One thing to notice about this data is that our `artists` information is stored as a nested list. This is because certain tracks have feature artists or are collaborations. Let's make our first processing step extracting those artist names and combining them in a logical way. We'll do that by defining our own function that unnests the `artists` column and concatenates the names using a `/`. 
+We are provided with a lot of data about individual tracks, most of it revolving around the album details. One thing to notice about this data is that our `artists` information is stored as a nested list. This is because certain tracks have featured artists or are collaborations. Let's make our first processing step extracting those artist names and combining them in a logical way. We'll do that by defining our own function that unnests the `artists` column and concatenates the names using a `/`. 
 
 ```{r}
+
 combine_artists <- function(df) {
   
   df %>% 
@@ -73,11 +104,13 @@ combine_artists <- function(df) {
     str_c(collapse = " / ")
   
 }
+
 ```
 
-Now we'll take our new function and use it to clean up our data. We're going to bring along the `popularity` variable as it proved valuable in clustering my top artists together last time. We're also going to rename the song-related variables so that we don't run into an error message when we unnest the similarly-named artist variables.
+Now we'll take our new function and use it to clean our data. We're going to bring along the `popularity` variable as it proved valuable in clustering my top artists together last time. We're also going to rename the song-related variables so that we don't run into an error message when we unnest the similarly-named artist variables.
 
 ```{r}
+
 my_top_songs_cleaned_tbl <- my_top_songs_tbl %>%
   mutate(my_ranking = row_number()) %>% 
   rename(
@@ -88,15 +121,17 @@ my_top_songs_cleaned_tbl <- my_top_songs_tbl %>%
   select(song_id, song, artist, popularity, my_ranking)
 
 my_top_songs_cleaned_tbl %>% 
-  slice(1:10) %>% 
+  head(10) %>% 
   kable()
+
 ```
 
-Nice and clean, right? If you remember the types of artists I listened to from my last post, the types of songs on this list shouldn't be much of a surprise. There is a fair mix of pop and alternative music with some heavier stuff thrown in for good measure. And no, that's not a typo; both the regular and acoustic versions of "Daphne Blue" are two of my most-played tracks. The song slaps ¯\\_(ツ)_/¯.
+Nice and clean, right? If you remember the types of artists I listened to from my last post, the types of songs on this list shouldn't be much of a surprise. There is a fair mix of pop and alternative music with a little heavy stuff thrown in for good measure. Kind of makes sense that The 1975 was my most played band, doesn't it?
 
 Let's take a quick look at the popularity of my top songs across all Spotify users.
 
 ```{r}
+
 library(ggdark)
 
 my_top_songs_cleaned_tbl %>% 
@@ -115,91 +150,105 @@ my_top_songs_cleaned_tbl %>%
     x = "Popularity",
     y = "Song"
   )
+
 ```
 
-I'm actually kind of shocked by the popularity of "Popular Monster" as it's a heavy song with heavy themes. I suppose it's a testament to the quality of the song.
+It makes sense that the two artists who have had songs in the Top 10 before are the most popular songs. And it makes sense that "Hummer" is at the bottom as it's a 13-year-old song.
 
-### Getting Track Audio Features
+## Getting Track Audio Features
 
-One of the coolest features of the Spotify API is that you can access track audio features. Audio features act as a sort of DNA for each song on Spotify and measure aspects of the music such as their energy levels, how likely the song is to be a live recording, how happy the song and more traditional measure like key and tempo. You can learn more about The Echo Nest, Spotify's acquisition that enabled this technology, [in this article](https://techcrunch.com/2014/03/06/spotify-acquires-the-echo-nest/).
+One of the coolest features of the Spotify API is that you can access track audio features. Audio features act as a sort of DNA for each song on Spotify and measure aspects of the music such as their energy levels, how likely the song is to be a live recording, how happy the song is and more traditional measure like key and tempo. You can learn more about The Echo Nest, Spotify's acquisition that enabled this technology, [in this article](https://techcrunch.com/2014/03/06/spotify-acquires-the-echo-nest/).
 
 We are going to use the following chunk of code to download the audio features for each of my top tracks.
 
 ```{r}
+
 my_top_songs_features_tbl <- my_top_songs_cleaned_tbl %>%
   mutate(audio_features = map(song_id, get_track_audio_features)) %>% 
   unnest(audio_features) %>%
   mutate(duration_m = duration_ms / 1000 / 60) %>% 
   select(-contains("id"), -uri, -track_href, -analysis_url, -type, -duration_ms)
+
 ```
 
-I saved the song duration (`duration_m`) as I thought it might make an interesting variable to include in our clustering later.
+I included the song duration (`duration_m`) as I thought it might make an interesting variable to include in our clustering later.
 
 Let's see how this data looks.
 
 ```{r}
+
 my_top_songs_features_tbl %>% 
   glimpse()
+
 ```
 
 As you can see, there is a lot of data here and most of it is on different scales. Let's plot some histograms to get a better sense of how this data is distributed.
 
 ```{r}
+
 my_top_songs_features_tbl %>% 
   pivot_longer(cols = danceability:duration_m, names_to = "feature", values_to = "measure") %>% 
   ggplot(aes(x = measure)) +
   geom_histogram(fill = "#1DB954", bins = sqrt(50)) +
   dark_theme_minimal() +
   facet_wrap(~ feature, scales = "free")
+
 ```
 
 What immediately jumps out to me is that `time_signature` has only a single value: 4/4. That means we can drop this variable when it comes time to start clustering as it won't add any information to the model.
 
-After that, I notice that `valence` (a measure of the positivity of the track) and `danceability` are almost normally distributed with some skew towards the low and high ends, respectively. Diagnosing why my top songs seem to be negative songs that make you want to dance is an issue that I'm sure will make my future therapist very rich.
+After that, I notice that `valence` (a measure of the positivity of the track) and `danceability` are almost normally distributed with some slight skew towards the low and high ends, respectively. Diagnosing why my top songs seem to skew towards being unhappy songs that make you want to dance is an issue that I'm sure will make my future therapist very rich.
 
-`Acousticness`, `liveness` and `instrumentalness` both feature large right skews indicating a preference for heavily produced, studio recordings with lots of singing. Loudness, however, features a left skew indicating that I like my heavily produced, studio recordings with lots of singing played **loud**.
+`Acousticness`, `duration_m`, `liveness`, `instrumentalness`, and `speechiness` all feature large right skews indicating a preference for short, heavily produced, studio recordings with lots of singing. `loudness`, however, features a slight left skew indicating that I like my short, heavily produced, studio recordings with lots of singing played **loud**.
 
 You can read more about the definitions of these variables as well as seeing their population distributions in the [Spotify for Developers reference guide](https://developer.spotify.com/documentation/web-api/reference/tracks/get-audio-features/).
 
 Let's go ahead and normalize all of these audio features to make sure that none of them have undue weight in our clustering algorithm.
 
 ```{r}
+
 library(recipes)
 
 song_features_processed_tbl <- recipe(song + artist ~ ., data = my_top_songs_features_tbl) %>% 
-  step_rm(time_signature, my_ranking, duration_m, popularity, instrumentalness, key) %>% 
+  step_rm(time_signature, my_ranking, instrumentalness, key) %>% 
   step_normalize(all_numeric()) %>%
   prep() %>% 
   juice()
+
 ```
 
-### K-Means Clustering
+## K-Means Clustering
 
 Now that we have our data in a cluster-friendly format, let's define the clustering function we used in the last analysis. This function allowed us to utilize a k-means clustering algorithm in a tidy way.
 
 ```{r}
+
 kmeans_mapper <- function(data, centers = 3) {
   
   data %>%
     kmeans(centers = centers, nstart = 100)
   
 }
+
 ```
 
 Just like last time, we're going to use the `glance()` function to extract relevant metrics from the algorithm and the `set.seed()` function to ensure reproducible.
 
 ```{r}
+
 library(broom)
 
-set.seed(123)
+set.seed(1234)
 kmeans_songs_mapped_tbl <- tibble(centers = 1:15) %>% 
   mutate(k_means = centers %>% map(kmeans_mapper, data = song_features_processed_tbl %>% select(-song, -artist)),
          glance = k_means %>% map(glance))
+
 ```
 
-Now, we'll extract the necessary information from each model to make a skree plot and see if there is an ideal number of clusters.
+Now, we'll extract the necessary information from each model to make an elbow plot and see if there is an ideal number of clusters.
 
 ```{r}
+
 kmeans_songs_mapped_tbl %>%
   unnest(glance) %>%
   select(centers, tot.withinss) %>%
@@ -207,19 +256,21 @@ kmeans_songs_mapped_tbl %>%
   geom_point(color = "#1DB954", size = 4) +
   geom_line(color = "#1DB954") +
   dark_theme_minimal() +
-  labs(title = "Skree plot")
+  labs(title = "Elbow plot")
+
 ```
 
-There is no discernible "elbow" to this plot so any choice we make will be rather arbitrary. With that in mind, I'm going to pick six centers because I have a feeling that my taste in songs will have some variety to them and I want to allow the algorithm adequate bandwidth to capture that variety.
+There is no discernible "elbow" to this plot so any choice we make will be rather arbitrary. With that in mind, I'm going to pick six centers because we have more variables than last time and I want to allow the algorithm adequate bandwidth to capture their variety.
 
-### Dimensionality Reduction
+## Dimensionality Reduction
 
 Just like last time, we're going to make use of the UMAP non-linear dimensionality reduction technique. We'll also bind our song and artist names onto these new, reduced variables.
 
 ```{r}
+
 library(umap)
 
-set.seed(123)
+set.seed(1234)
 umap_songs_obj <- song_features_processed_tbl %>% 
   select(-song, -artist) %>% 
   umap()
@@ -233,15 +284,17 @@ umap_songs_results_tbl <- umap_songs_obj$layout %>%
 umap_songs_results_tbl %>% 
   head() %>% 
   kable()
+
 ```
 
 All of that complex audio feature data has now been reduced to a concise and easily-to-visualize pair of features.
 
-### Plotting the Track Clusters
+## Plotting the Track Clusters
 
-Now that we've done the hard work of clustering the artists and reducing the number of variables we use to describe them, now comes the fun part: visualizing the clusters. We'll use the following chunks of code to pull the cluster information, use the `augment()` function to extract the clusters numbers and then join those cluster numbers to the UMAP-reduced variables.
+Now that we've done the hard work of clustering the tracks and reducing the number of variables we use to describe them, now comes the fun part: visualizing the clusters. We'll use the following chunks of code to pull the cluster information, use the `augment()` function to extract the cluster numbers and then join those cluster numbers to the UMAP-reduced variables.
 
 ```{r}
+
 kmeans_songs_obj <- kmeans_songs_mapped_tbl %>% 
   pull(k_means) %>% 
   pluck(6)
@@ -256,11 +309,13 @@ umap_kmeans_results_songs_tbl <- umap_songs_results_tbl %>%
 
 umap_kmeans_results_songs_tbl %>% 
   glimpse()
+
 ```
 
-Before plotting, we're going to add a `label_text` variable so that we have some nice labeling on our finished plot. We're also going to use the `ggreepel` package to ensure that our labels are plotted in a readable way.
+Before plotting, we're going to add a `label_text` variable so that we have some nice labeling on our finished plot. We're also going to use the `ggrepel` package to ensure that our labels are plotted in a readable way.
 
 ```{r}
+
 library(ggrepel)
 
 umap_kmeans_results_songs_tbl %>%
@@ -279,20 +334,15 @@ umap_kmeans_results_songs_tbl %>%
     y = ""
   ) +
   theme(legend.position = "none")
+
 ```
 
 It looks like six clusters wasn't too bad of a choice. Nice!
 
-Cluster 1 is the smallest of the clusters with two songs and it's what I would call the "let's talk as fast as we can" genre; "Godzilla" has Eminem rapping some of the fastest lyrics he's ever done and "idontknow," while technically an instrumental track, features spoken word samples sped up to go really fast. This is a pretty fascinating grouping by the k-means algorithm.
+The clustering algorithm has found some interesting relationships between these track features. For instance, Cluster 1 is made up of mostly of songs off of The 1975's new album, songs that range from 80's-style pop songs to introspective electronica. At the same time, "After Hours" by The Weeknd ended up in there, too. "After Hours" definitely fits the bill of "introspective electronica" but also has a little bit of an 80's influence to it, like a lot of The Weeknd's music. I never would've put The Weeknd and The 1975 in the same group, but the algorithm picked up on their similarities better than I did.
 
-Cluster 2 features a lot of happy, high-energy songs and a lot of The 1975 and The Band CAMINO. 
+## In Conclusion
 
-Cluster 3 features high-energy songs with some less-than-happy themes; Twenty One Pilots "Level of Concern" will probably be the most danceable song ever recorded about being stuck in quarantine.
+When we grouped my top artists, we discussed ways in which clustering could be used to understand individual customer habits (ie. Amazon purchase history). In this analysis, we observed a way that clustering could be used to understand the shopping habits of group of individuals, even discovering relationships that might not appear obvious on the surface. For instance, if we were looking at this analysis from the context of a grocery chain, we might see that customers who buy Oikos greek yogurt and Gia Russa pasta sauce also seem to be buying large quantities of charcoal. We may not understand what these customers are doing with these things, but we don't necessarily have to. All we have to know is that there is some sort of relationship and offer a discount on charcoal to customers who are buying greek yogurt and pasta sauce to potentially increase sales.
 
-Cluster 4 is what I would call "fast, loud and angry." This is where most of the metal tracks I've listened to make an appearance.
-
-Cluster 5 is the mellow cluster and features the only classical recording to make my top tracks list. Before you think you might've discovered some culture buried deep within my music taste, know that Ramin Djawadi's "Wicked Games" is a cover of The Weeknd's "Wicked Games" that he recorded for Westworld. So, in actuality, I'm just as basic as I seem.
-
-Finally, Cluster 6 feature songs that I would describe as "anthemic." They're the type of songs that you might not know all the words to, but you can't help but shouting along to the chorus.
-
-Thanks for walking through this analysis with me. Check out the `spotifyr` package yourself and feel free to tag me on [Twitter](https://twitter.com/realauggiehesch) with what you find. I'd love to see. And feel free to reach out to me on [LinkedIn](https://www.linkedin.com/in/auggieheschmeyer/) or [Twitter](https://twitter.com/realauggiehesch). Happy analyzing!
+Thanks for walking through this analysis with me. You can find all of the data and code related to this analysis in [this GitHub repo](https://github.com/realauggieheschmeyer/analyzing_my_spotify). Check out the `spotifyr` package yourself and feel free to tag me on [Twitter](https://twitter.com/realauggiehesch) with what you find. I'd love to see. And feel free to reach out to me on [LinkedIn](https://www.linkedin.com/in/auggieheschmeyer/). Happy analyzing!
